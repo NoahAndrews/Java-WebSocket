@@ -321,19 +321,25 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 			int iShutdownCount = 5;
 			int selectTimeout = 0;
 			while ( !selectorthread.isInterrupted() && iShutdownCount != 0) {
+				log.debug(String.format("Executing main server loop. interrupted=%b iShutdownCount=%d", selectorthread.isInterrupted(), iShutdownCount));
 				SelectionKey key = null;
 				WebSocketImpl conn = null;
 				try {
 					if (isclosed.get()) {
+						log.debug("isclosed is true, setting selectTimeout to 5.");
 						selectTimeout = 5;
 					}
+					log.debug("Calling selector.select with timeout of " + selectTimeout + "...");
 					int keyCount = selector.select( selectTimeout );
+					log.debug(String.format("... keyCount=%d", keyCount));
 					if (keyCount == 0 && isclosed.get()) {
+						log.debug("Decrementing iShutdownCount");
 						iShutdownCount--;
 					}
 					Set<SelectionKey> keys = selector.selectedKeys();
 					Iterator<SelectionKey> i = keys.iterator();
 
+					log.debug("Entering nested while loop");
 					while ( i.hasNext() ) {
 						key = i.next();
 						conn = null;
@@ -343,6 +349,7 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 						}
 
 						if( key.isAcceptable() ) {
+							log.debug("Calling doAccept");
 							doAccept(key, i);
 							continue;
 						}
@@ -352,9 +359,11 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 						}
 
 						if( key.isWritable() ) {
+							log.debug("Calling doWrite");
 							doWrite(key);
 						}
 					}
+					log.debug("Exiting nested while loop and calling doAdditionalRead");
 					doAdditionalRead();
 				} catch ( CancelledKeyException e ) {
 					// an other thread may cancel the key
@@ -369,6 +378,9 @@ public abstract class WebSocketServer extends AbstractWebSocket implements Runna
 					Thread.currentThread().interrupt();
 				}
 			}
+			log.debug("Exited main loop!");
+			log.debug("selectorthread interrupted: " + selectorthread.isInterrupted());
+			log.debug("iShutdownCount: " + iShutdownCount);
 		} catch ( RuntimeException e ) {
 			// should hopefully never occur
 			handleFatal( null, e );
